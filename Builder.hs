@@ -9,8 +9,9 @@ buildFile file = do
   let x = parse P.parseFile "" file
   case x of
     Left err -> print err
-    Right ls -> do
-      print $ unlines (concatMap (\l -> show <$> buildCommand l 0) ls)
+    Right ls ->
+      print $ concat (zipWith buildCommand ls [0..])
+      --print $ unlines (concatMap (\l -> show <$> buildCommand l 0) ls)
 
 buildCommand :: P.Command -> Int -> [Line]
 buildCommand (P.CArith x) i = buildArith x i

@@ -5,9 +5,16 @@ type Program = [Line]
 data Line = AIn AInstruction
           | CIn CInstruction
           | LIn String
-          deriving (Show)
 
-data VirtualRegister = R Int deriving (Show)
+instance Show Line where
+  show (AIn x) = show x
+  show (CIn x) = show x
+  show (LIn x) = "(" ++ x ++ ")"
+
+data VirtualRegister = R Int
+
+instance Show VirtualRegister where
+  show (R x) = 'R' : show x
 
 data PredefinedPointer = SP
                         | LCL
@@ -24,11 +31,19 @@ data Symbol = VR VirtualRegister
             | PP PredefinedPointer
             | IP IOPointer
             | UDefSymbol String
-            deriving (Show)
+
+instance Show Symbol where
+  show (VR x) = show x
+  show (PP x) = show x
+  show (IP x) = show x
+  show (UDefSymbol x) = x
 
 data AInstruction = AtInt Int
                   | AtSymbol Symbol
-                  deriving (Show)
+
+instance Show AInstruction where
+  show (AtInt x) = '@' : show x
+  show (AtSymbol x) = '@' : show x
 
 data Reg = D | A | M deriving (Show, Eq)
 
@@ -36,11 +51,20 @@ data DestReg = Single Reg
              | Double Reg Reg
              | Triple Reg Reg Reg
              | RNull
-             deriving (Show)
+
+instance Show DestReg where
+  show (Single x) = show x
+  show (Double x y) = show x ++ show y
+  show (Triple x y z) = show x ++ show y ++ show z
+  show (RNull) = "Null"
 
 data ConstExpr = One
                | Register Reg
-               deriving (Show, Eq)
+               deriving (Eq)
+
+instance Show ConstExpr where
+  show One = "1"
+  show (Register x) = show x
 
 data Expr = Zero
           | C ConstExpr
@@ -50,10 +74,21 @@ data Expr = Zero
           | Or ConstExpr ConstExpr
           | Not ConstExpr
           | Negate ConstExpr
-          deriving (Show)
 
+instance Show Expr where
+  show Zero = "0"
+  show (C x) = show x
+  show (Add x y) = show x ++ "+" ++ show y
+  show (Minus x y) = show x ++ "-" ++ show y
+  show (And x y) = show x ++ "&" ++ show y
+  show (Or x y) = show x ++ "|" ++ show y
+  show (Not x) = "!" ++ show x
+  show (Negate x) = "-" ++ show x
 
-data Assignment = Ass DestReg Expr deriving (Show)
+data Assignment = Ass DestReg Expr
+
+instance Show Assignment where
+  show (Ass x y) = show x ++ "=" ++ show y
 
 data Jump = JMP
           | JEQ
@@ -68,4 +103,8 @@ data Jump = JMP
 data CInstruction = CAss Assignment
                   | JAss Assignment Jump
                   | JExpr Expr Jump
-                  deriving (Show)
+
+instance Show CInstruction where
+  show (CAss x) = show x
+  show (JAss x y) = show x ++ ";" ++ show y
+  show (JExpr x y) = show x ++ ";" ++ show y
