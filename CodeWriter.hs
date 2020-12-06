@@ -35,8 +35,9 @@ buildArith P.Eq i = buildCompare JEQ i
 buildArith P.Gt i = buildCompare JGT i
 buildArith P.Lt i = buildCompare JLT i
 
-buildCompare x i = (buildArith P.Sub i) ++
-        [ AIn (AtSymbol (UDefSymbol ("TRUE"++ show i)))  -- @TRUE
+buildCompare x i = get2Args ++
+        [ CIn (CAss (Ass (Single D) (Minus (Register M) (Register D))))
+        , AIn (AtSymbol (UDefSymbol ("TRUE"++ show i)))  -- @TRUE
         , CIn (JExpr (C (Register D)) x)      -- D; comparaison
         , CIn (CAss (Ass (Single D) Zero))      -- D=0
         , AIn (AtSymbol (UDefSymbol ("CONTINUE"++ show i))) -- @CONTINUE
@@ -57,7 +58,8 @@ get2Args :: [Line]
 get2Args = getArg ++
   [ CIn (CAss (Ass (Single D) (C (Register M)))) -- D=M
   , AIn (AtSymbol (PP SP))                      -- @SP
-  , CIn (CAss (Ass (Double A M) (Minus (Register M) One))) -- AM=M-1
+  , CIn (CAss (Ass (Single M) (Minus (Register M) One))) -- M=M-1
+  , CIn (CAss (Ass (Single A) (Minus (Register M) One))) -- A=M-1
   ]
 
 -- Pushing to stack
@@ -89,7 +91,7 @@ buildPush P.That x _ = buildPushSimple (PP THAT) x M
 
 buildPushSimple :: Symbol -> Int -> Reg -> [Line]
 buildPushSimple x y z = putTargetIn x y A z ++
-                      [ CIn (CAss (Ass (Single D) (C (Register z))))] ++
+                      [ CIn (CAss (Ass (Single D) (C (Register M))))] ++
                       pushDToStack
 
 
@@ -142,6 +144,7 @@ putTargetIn x y z a = [ AIn (AtSymbol x)
                       ]
 popFromStackToD :: [Line]
 popFromStackToD = [ AIn (AtSymbol (PP SP))
-                  , CIn (CAss (Ass (Double M A) (Minus (Register M) One)))
+                  , CIn (CAss (Ass (Single M) (Minus (Register M) One)))
+                  , CIn (CAss (Ass (Single A) (C (Register M))))
                   , CIn (CAss (Ass (Single D) (C (Register M))))
                   ]
