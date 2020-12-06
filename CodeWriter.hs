@@ -1,22 +1,18 @@
-module Builder where
+module CodeWriter where
 
 import Text.Parsec(parse)
 import qualified Parser as P
 import Grammar
 
 
-buildFile file = do
-  let x = parse P.parseFile "" file
-  case x of
-    Left err -> print err
-    Right ls ->
-      print $ concat (zipWith buildCommand ls [0..])
-      --print $ unlines (concatMap (\l -> show <$> buildCommand l 0) ls)
 
-buildCommand :: P.Command -> Int -> [Line]
-buildCommand (P.CArith x) i = buildArith x i
-buildCommand (P.CPush x y) _ = buildPush x y
-buildCommand (P.CPop x y) _ = buildPop x y
+buildFile :: [P.Command] -> String -> String
+buildFile file filename = unlines (fmap show (concat (zipWith (buildCommand filename) file [0..] )))
+
+buildCommand :: String -> P.Command -> Int  -> [Line]
+buildCommand _ (P.CArith x) i = buildArith x i
+buildCommand fn (P.CPush x y) _ = buildPush x y fn
+buildCommand fn (P.CPop x y) _ = buildPop x y fn
 
 -- Arithmetic operations
 
@@ -66,28 +62,32 @@ get2Args = getArg ++
 
 -- Pushing to stack
 
-buildPush :: P.Segment -> Int -> [Line]
-buildPush P.Constant x =
+buildPush :: P.Segment -> Int -> String -> [Line]
+buildPush P.Constant x _ =
   [ AIn (AtInt x)                 -- @x
   , CIn (CAss (Ass (Single D) (C (Register A)))) -- D=A
   ]
   ++ pushDToStack
 
-buildPush P.Static y = undefined
-buildPush P.Pointer 0 = [ AIn (AtSymbol (PP THIS))
-                        , CIn (CAss (Ass (Single D) (C (Register M))))
-                        ] ++ pushDToStack
+buildPush P.Static x fn = [ AIn (AtSymbol (UDefSymbol (fn ++ "." ++ show x)))
+                         , CIn (CAss (Ass (Single D) (C (Register M))))
+                         ] ++ pushDToStack
 
-buildPush P.Pointer 1 = [ AIn (AtSymbol (PP THAT))
-                        , CIn (CAss (Ass (Single D) (C (Register M))))
-                        ] ++ pushDToStack
+buildPush P.Pointer 0 _ = [ AIn (AtSymbol (PP THIS))
+                          , CIn (CAss (Ass (Single D) (C (Register M))))
+                          ] ++ pushDToStack
 
-buildPush P.Temp y = buildPushSimple (VR (R 5)) y A
-buildPush P.Argument y = buildPushSimple (PP ARG) y M
-buildPush P.Local y = buildPushSimple (PP LCL) y M
-buildPush P.This y = buildPushSimple (PP THIS) y M
-buildPush P.That y = buildPushSimple (PP THAT) y M
+buildPush P.Pointer 1 _ = [ AIn (AtSymbol (PP THAT))
+                          , CIn (CAss (Ass (Single D) (C (Register M))))
+                          ] ++ pushDToStack
 
+buildPush P.Temp x _ = buildPushSimple (VR (R 5)) x A
+buildPush P.Argument x _ = buildPushSimple (PP ARG) x M
+buildPush P.Local x _ = buildPushSimple (PP LCL) x M
+buildPush P.This x _ = buildPushSimple (PP THIS) x M
+buildPush P.That x _ = buildPushSimple (PP THAT) x M
+
+buildPushSimple :: Symbol -> Int -> Reg -> [Line]
 buildPushSimple x y z = putTargetIn x y A z ++
                       [ CIn (CAss (Ass (Single D) (C (Register z))))] ++
                       pushDToStack
@@ -102,25 +102,29 @@ pushDToStack = [ AIn (AtSymbol (PP SP))                             -- @SP
                ]
 
 -- Poping from stack
-
-buildPop P.Constant y = undefined
-buildPop P.Static y = undefined
-buildPop P.Pointer 0 = popFromStackToD ++
+buildPop :: P.Segment -> Int -> String -> [Line]
+buildPop P.Constant _ _ = undefined
+buildPop P.Static y z = popFromStackToD ++
+                       [ AIn (AtSymbol (UDefSymbol (z ++ "." ++ show y)))
+                       , CIn (CAss (Ass (Single M) (C (Register D))))
+                       ]
+buildPop P.Pointer 0 _ = popFromStackToD ++
                        [ AIn (AtSymbol (PP THIS))
                        , CIn (CAss (Ass (Single M) (C (Register D))))
                        ]
 
-buildPop P.Pointer 1 = popFromStackToD ++
+buildPop P.Pointer 1 _ = popFromStackToD ++
                        [ AIn (AtSymbol (PP THAT))
                        , CIn (CAss (Ass (Single M) (C (Register D))))
                        ]
 
-buildPop P.Temp y = buildPopSimple (VR (R 5)) y A
-buildPop P.Argument y = buildPopSimple (PP ARG) y M
-buildPop P.Local y = buildPopSimple (PP LCL) y M
-buildPop P.This y = buildPopSimple (PP THIS) y M
-buildPop P.That y = buildPopSimple (PP THAT) y M
+buildPop P.Temp y _ = buildPopSimple (VR (R 5)) y A
+buildPop P.Argument y _ = buildPopSimple (PP ARG) y M
+buildPop P.Local y _ = buildPopSimple (PP LCL) y M
+buildPop P.This y _ = buildPopSimple (PP THIS) y M
+buildPop P.That y _ = buildPopSimple (PP THAT) y M
 
+buildPopSimple :: Symbol -> Int -> Reg -> [Line]
 buildPopSimple x y z = putTargetIn x y D z ++
                   [ AIn (AtSymbol (VR (R 13)))
                   , CIn (CAss (Ass (Single M) (C (Register D))))
@@ -130,13 +134,13 @@ buildPopSimple x y z = putTargetIn x y D z ++
                   , CIn (CAss (Ass (Single A) (C (Register M))))
                   , CIn (CAss (Ass (Single M) (C (Register D))))
                   ]
-
+putTargetIn :: Symbol -> Int -> Reg -> Reg -> [Line]
 putTargetIn x y z a = [ AIn (AtSymbol x)
-                 , CIn (CAss (Ass (Single D) (C (Register a))))
-                 , AIn (AtInt y)
-                 , CIn (CAss (Ass (Single z) (Add (Register D) (Register A))))
-                 ]
-
+                      , CIn (CAss (Ass (Single D) (C (Register a))))
+                      , AIn (AtInt y)
+                      , CIn (CAss (Ass (Single z) (Add (Register D) (Register A))))
+                      ]
+popFromStackToD :: [Line]
 popFromStackToD = [ AIn (AtSymbol (PP SP))
                   , CIn (CAss (Ass (Double M A) (Minus (Register M) One)))
                   , CIn (CAss (Ass (Single D) (C (Register M))))
