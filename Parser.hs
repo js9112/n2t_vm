@@ -16,7 +16,7 @@ data Segment = Argument
              | That
              | Pointer
              | Temp
-             deriving (Enum)
+             deriving (Enum, Eq)
 
 instance Show Segment where
   show Argument = "argument"
@@ -91,7 +91,10 @@ parsePush = do
     segment <- parseSegment
     char ' '
     loc <- many1 digit
-    return (CPush segment (read loc))
+    if segment==Temp && notElem (read loc) [0..7]
+      then fail "Temp has only 8 slots"
+      else return (CPush segment (read loc))
+
 
 parseSegment :: Parser Segment
 parseSegment = try (string "argument" >> return Argument)
