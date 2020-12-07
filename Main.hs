@@ -18,6 +18,7 @@ main = do
     Left err -> print err
     Right ls -> do
       case buildFile ls filename of
-        Left err -> print err
+        Left err -> putStrLn $ "ERROR: "++ err
         Right f -> do
           writeFile (filenameWithPath ++ ".asm") f
+          putStrLn $ "Succesfully translated to " ++ filenameWithPath
