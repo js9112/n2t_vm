@@ -13,9 +13,11 @@ main = do
   contents <- readFile src
   let filename = takeBaseName src
   let filenameWithPath = dropExtension src
-  let x = parse parseFile "" contents
+  let x = parse parseFile filename contents
   case x of
     Left err -> print err
     Right ls -> do
-      let x = buildFile ls filename
-      writeFile (filenameWithPath ++ ".asm") x
+      case buildFile ls filename of
+        Left err -> print err
+        Right f -> do
+          writeFile (filenameWithPath ++ ".asm") f

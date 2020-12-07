@@ -6,7 +6,13 @@ import Data.Maybe
 data Command = CArith Operation
              | CPush Segment Int
              | CPop Segment Int
+             | CFlow Flow
              deriving (Show)
+
+data Flow = Label String
+           | GoTo String
+           | IfGoTo String
+           deriving (Show)
 
 data Segment = Argument
              | Local
@@ -61,7 +67,8 @@ parseFile = do
 parseCommand :: Parser (Maybe Command)
 parseCommand = fmap Just (try parseArith
               <|> try parsePush
-              <|> try parsePop)
+              <|> try parsePop
+              <|> try parseFlow)
               <* parseCommentOrNothing
 
 parseArith :: Parser Command
@@ -82,7 +89,9 @@ parsePop = do
   segment <- parseSegment
   char ' '
   loc <- many1 digit
-  return (CPop segment (read loc))
+  if segment==Temp && notElem (read loc) [0..7]
+    then fail "Temp has only 8 slots"
+    else return (CPop segment (read loc))
 
 parsePush :: Parser Command
 parsePush = do
@@ -120,4 +129,26 @@ parseComment = do
   return Nothing
 
 parseCommentOrNothing :: Parser (Maybe a)
-parseCommentOrNothing = parseComment <|> (many (oneOf " \t") >> pure Nothing)
+parseCommentOrNothing = (try parseComment) <|> (many (oneOf " \t") >> pure Nothing)
+
+-- Parsing flow
+parseIdentifier :: Parser String
+parseIdentifier = do
+  firstChar <- nonDigitChar
+  rest <- maybeDigitCharList
+  return (firstChar:rest)
+  where
+    nonDigitChar = oneOf "_.:" <|> letter
+    maybeDigitCharList = many (nonDigitChar <|> digit)
+
+parseFlow :: Parser Command
+parseFlow = do
+          c <- parseFlowCommand
+          char ' '
+          l <- parseIdentifier
+          return (CFlow (c l))
+
+parseFlowCommand :: Parser (String -> Flow)
+parseFlowCommand = try (string "label" >> return Label)
+               <|> try (string "goto" >> return GoTo)
+               <|> try (string "if-goto" >> return IfGoTo)
